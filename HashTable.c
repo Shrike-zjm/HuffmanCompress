@@ -1,5 +1,7 @@
 #include<math.h>
 #include<stdio.h>
+int WordNum=0;
+int TotalWord=0;
 //哈希表
 struct LNode
 {
@@ -8,11 +10,14 @@ struct LNode
 	struct LNode* Next;
 };
 typedef struct LNode* LPtr;
-//struct list
-//{
-//	LPtr []
-//};
-//毕竟不是List 应该不用Head和Tail;
+struct FreNode
+{
+	char* Word;
+	int total;
+	struct FreNode* Next;
+};
+typedef struct FreNode* FNPtr;
+
 int isPrime(int x)
 {
 	if(x<=1)return 0;
@@ -54,7 +59,8 @@ int CodeToInt(char* Code)
 	}
 	int x=strlen(Code);
 	return res;
-}int CodeToInt8(char* Code)
+}
+int CodeToInt8(char* Code)
 {
 	int res=0;
 	int Weight=pow2(7);//Weight类型为int 此时最多能处理31位码字
@@ -62,6 +68,22 @@ int CodeToInt(char* Code)
 	{
 		res+=Weight*((*Code)-'0');
 		Weight/=2;
+	}
+	return res;
+}
+int GetLastx(unsigned char byte,int x)
+{
+	byte=byte<<(8-x);
+	byte=byte>>(8-x);
+	return (int)byte;
+}
+int Pow(int x,int y)
+{
+	int i;
+	int res=1;
+	for(i=1;i<=y;i++)
+	{
+		res*=x;
 	}
 	return res;
 }
@@ -91,6 +113,37 @@ int Hash(char type,char* key,int thePrime)
 		}
 		return HashGBK;
 	}
+	else if(type=='u')//utf-8的哈希
+	{
+		if(strlen(key)==1)
+		{
+			unsigned char c1Num=*key;
+			int NumOfAChar=c1Num*631;
+			return(NumOfAChar%thePrime);
+			
+		}
+		else
+		{
+			int len=strlen(key);
+			unsigned char* array=malloc(sizeof(unsigned char)*(len));
+			int i;
+			for(i=0;i<=len-1;i++)
+			{
+				array[i]=key[i];
+			}
+			int sum=0;
+			int weight=Pow(1<<6,len-1);
+			sum+=GetLastx(array[0],7-len)*weight;
+			weight/=(1<<6);
+			for(i=1;i<=len-1;i++)
+			{
+				sum+=GetLastx(array[i],6)*weight;
+				weight/=(1<<6);
+			}
+			int res=sum%thePrime;
+			return res;
+		}
+	}
 }
 struct hashTable
 {
@@ -98,11 +151,26 @@ struct hashTable
 	int MaxSize;
 };
 typedef struct hashTable* HashTable;
+struct freHashTable
+{
+	FNPtr* Heads;
+	int MaxSize;
+};
+typedef struct freHashTable* FHTable;
 HashTable CreHashTable(int thePrime)
 {
 	HashTable HT=malloc(sizeof(struct hashTable));
 	HT->MaxSize=thePrime;
 	HT->Heads=malloc(sizeof(LPtr)*(HT->MaxSize));
+	int i;
+	for(i=0;i<=HT->MaxSize-1;i++) HT->Heads[i]=NULL;
+	return HT;
+}
+FHTable CreFHTable(int thePrime)
+{
+	FHTable HT=malloc(sizeof(struct freHashTable));
+	HT->MaxSize=thePrime;
+	HT->Heads=malloc(sizeof(FNPtr)*(HT->MaxSize));
 	int i;
 	for(i=0;i<=HT->MaxSize-1;i++) HT->Heads[i]=NULL;
 	return HT;
@@ -115,6 +183,7 @@ void HashInsert(HashTable HT,char* Code,char* Word,char type)
 	LP->Next=NULL;
 	int address;
 	if(type=='g')address=Hash('g',Word,HT->MaxSize);
+	else if(type=='u')address=Hash('u',Word,HT->MaxSize);
 	else if(type=='c')address=Hash('c',Code,HT->MaxSize);
 	if(HT->Heads[address])//冲突
 	{
@@ -126,12 +195,47 @@ void HashInsert(HashTable HT,char* Code,char* Word,char type)
 	{
 		HT->Heads[address]=LP;
 	}
+	
 }
-char* Find(HashTable HT,char* key,char type)
+void FHInsert(FHTable FHT,char* Word)
 {
- 	if(type=='g')//根据gbk(Word)找码(Code)
+	FNPtr FNP=malloc(sizeof(struct FreNode));
+	FNP->Word=Word;
+	FNP->Next=NULL;
+	int address;
+	if(UTF8)address=Hash('u',Word,FHT->MaxSize);
+	else address=Hash('g',Word,FHT->MaxSize);
+	if(FHT->Heads[address])//冲突或已有
 	{
-  		int address=Hash('g',key,HT->MaxSize);
+		FNPtr P=FHT->Heads[address];
+		for(;P;P=P->Next)
+		{
+			if(strcmp(P->Word,FNP->Word)==0)
+			{
+				P->total++;
+				free(FNP);
+				return;
+			}
+		}
+		P=FHT->Heads[address];
+		for(;(P->Next)!=NULL;P=P->Next);
+		FNP->total=1;
+		WordNum++;
+		P->Next=FNP;
+		//return NULL;
+	}
+	else
+	{
+		FNP->total=1;
+		WordNum++;
+		FHT->Heads[address]=FNP;
+	}
+}
+char* HashFind(HashTable HT,char* key,char type)
+{
+ 	if(type=='g'||type=='u')//根据gbk(Word)找码(Code)
+	{
+  		int address=Hash(type,key,HT->MaxSize);
 		if(HT->Heads[address])
 		{
 			LPtr P=HT->Heads[address];
@@ -164,39 +268,90 @@ char* Find(HashTable HT,char* key,char type)
 		}
 	}
 }
-//int main()
-//{
-//	printf("%d",CodeToInt("0010011110"));
-//}
-//int main()
-//{
-////	char* x=malloc(sizeof(char)*30);
-////    gets(x);
-////	printf("%d",Hash('g',x,233));
-//	//printf("%d",NextPrime(626));
-//	HashTable HT=CreHashTable(5);
-//	char** array=malloc(sizeof(char*)*10);
-//	char** codes=malloc(sizeof(char*)*10);
-//	int i;
-//	for(i=0;i<=2;i++)
-//	{
-//		array[i]=malloc(sizeof(char)*30);
-//		codes[i]=malloc(sizeof(char)*30);
-//		scanf("%s",array[i]);
-//		scanf("%s",codes[i]);
-//	}
-//	
-//	for(i=0;i<=2;i++)
-//	{
-//		HashInsert(HT,codes[i],array[i],'c');
-//	}
-//	printf("Find:\n");
-//	for(i=1;i<=3;i++)
-//	{
-//		char* x=malloc(sizeof(char)*3);
-//		scanf("%s",x);
-//		char* res=Find(HT,x,'c');
-//		if(res)printf("%s\n",res);
-//		else(printf("NULL\n"));
-//	}
-//}
+void FreeHashTable(HashTable HT)
+{
+	int i;
+	for(i=0;i<=HT->MaxSize-1;i++)
+	{
+		LPtr P=HT->Heads[i];
+		LPtr Q;
+		if(!P)continue;
+		while(P->Next)
+		{
+			Q=P;
+			P=P->Next;
+			free(Q);
+		}
+		free(P);
+	}
+	free(HT->Heads);
+	free(HT);
+}
+void FreeFHTable(FHTable FHT)
+{
+	int i;
+	for(i=0;i<=FHT->MaxSize-1;i++)
+	{
+		FNPtr P=FHT->Heads[i];
+		FNPtr Q;
+		if(!P)continue;
+		while(P->Next)
+		{
+			Q=P;
+			P=P->Next;
+			free(Q);
+		}
+		free(P);
+	}
+	free(FHT->Heads);
+	free(FHT);
+}
+void HashMHInsert(MinHeap MH,FNPtr FNP)
+{
+	HuffmanTree HT=malloc(sizeof(struct HuffmanNode));
+	HT->Word=FNP->Word;
+	HT->total=FNP->total;
+	HT->Left=HT->Right=NULL;
+	//HT->level=1;
+	HT->Code=NULL;
+
+	MH->Total++;
+	//MH->Array[MH->Total]=HT;
+	int current=MH->Total;
+	while(HTcmp(HT,MH->Array[current/2])<0)
+	{
+		MH->Array[current]=MH->Array[current/2];
+		current=current/2;
+	}
+	MH->Array[current]=HT;
+}
+void FHTIntoHeap(FHTable FHT,MinHeap MH)
+{
+	int i;
+	for(i=0;i<=FHT->MaxSize-1;i++)
+	{
+		FNPtr P=FHT->Heads[i];
+		FNPtr Q;
+		if(!P)continue;
+		while(P->Next)
+		{
+			HashMHInsert(MH,P);
+			P=P->Next;
+		}
+		HashMHInsert(MH,P);
+	}
+
+}
+void InsertToHash(HuffmanTree HT,HashTable HashT,char type)
+{
+	if(HT)
+	{
+		if(HT->Word)
+		{
+			HashInsert(HashT,HT->Code,HT->Word,type);
+		}
+		InsertToHash(HT->Left,HashT,type);
+		InsertToHash(HT->Right,HashT,type);
+	}
+}
+

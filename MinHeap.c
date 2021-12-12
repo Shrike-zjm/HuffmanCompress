@@ -1,5 +1,3 @@
-//只取Word和total就可以
-
 struct HuffmanNode
 {
 	char* Word;
@@ -7,115 +5,8 @@ struct HuffmanNode
 	int total;
 	struct HuffmanNode* Left;
 	struct HuffmanNode* Right;
-	int level;
 };
 typedef struct HuffmanNode* HuffmanTree;
-//——————————————Test——————————————
-struct Q2Node
-{
-	HuffmanTree anPtr;
-	struct Q2Node* Next;
-};
-typedef struct Q2Node* q2nPtr;
-//typedef qnPtr Queue;
-struct q2ueue
-{
-	q2nPtr head;
-	q2nPtr tail;
-};
-typedef struct q2ueue* Q2ueue;
-
-Q2ueue Q2cre()
-{
-	Q2ueue q=malloc(sizeof(struct q2ueue));
-	q->head=q->tail=NULL;
-	return q;
-}
-
-Q2ueue Q2add(Q2ueue theQ,HuffmanTree anPtr)//入队
-{
-	q2nPtr qn=malloc(sizeof(struct Q2Node));
-	qn->anPtr=anPtr;
-	qn->Next=NULL;
-	if(theQ->head==NULL)
-	{
-		theQ->head=theQ->tail=qn;
-	}
-	else
-	{
-		theQ->tail->Next=qn;
-		theQ->tail=theQ->tail->Next;
-	}
-	return theQ;
-}
-
-HuffmanTree Q2del(Q2ueue theQ)//出队
-{
-	q2nPtr head=theQ->head;
-	theQ->head=head->Next;
-	HuffmanTree a=head->anPtr;
-	free(head);
-	return a;
-}
-void printHuffmanBetter(HuffmanTree avlt)//
-{
-	if(avlt)
-	{
-		HuffmanTree ap;
-		Q2ueue Q2=Q2cre();
-		Q2add(Q2,avlt);
-		int nowlevel=1;
-		while(Q2->head!=NULL)
-		{
-			ap=Q2del(Q2);
-			if(ap->level>nowlevel)
-			{
-				nowlevel++;
-				printf("\n");
-			}
-
-			if(!(ap->Word))printf("NULL");
-			else printf("%s",ap->Word);
-			printf("(%d)",ap->total);
-			printf("(L:%d) ",ap->level);
-			printf("Code:%s\n",ap->Code);
-			
-			if(ap->Left)
-			{
-				Q2add(Q2,ap->Left);
-			}
-			if(ap->Right)
-			{
-				Q2add(Q2,ap->Right);
-			}
-
-		}
-		printf("\n");
-	}
-}
-//——————————————Test——————————————
-void ChangeAllHuffmanLevel(HuffmanTree HT,int x)
-{
-	if(HT)
-	{
-		HT->level+=x;
-		ChangeAllHuffmanLevel(HT->Left,x);
-		ChangeAllHuffmanLevel(HT->Right,x);
-	}
-}
-void PrintHuffman(HuffmanTree HT)
-{
-	if(HT)
-	{
-		if(!(HT->Word))printf("NULL");
-		else printf("%s",HT->Word);
-		printf("(%d)",HT->total);
-		printf("(L:%d) ",HT->level);
-		printf("Code:%s\n",HT->Code);
-		PrintHuffman(HT->Left);
-		PrintHuffman(HT->Right);
-	}
-}
 struct minHeap
 {
 	HuffmanTree* Array;
@@ -136,11 +27,12 @@ MinHeap CreateMinHeap(int MaxSize)//0号是哨兵 不用
 	//HP->Array=malloc(sizeof(struct HuffmanNode)*(MaxSize+1));
 	//数组里全是结构体应该...?
 	HP->Array=malloc(sizeof(HuffmanTree)*(MaxSize+1));
-	int i;
-	for(i=0;i<=MaxSize;i++)
-	{
-		HP->Array[i]=malloc(sizeof(struct HuffmanNode));
-	}
+//	int i;
+//	for(i=0;i<=MaxSize;i++)
+//	{
+//		HP->Array[i]=malloc(sizeof(HuffmanTree));
+//	}
+	HP->Array[0]=malloc(sizeof(struct HuffmanNode));
 	HP->Array[0]->Word=malloc(sizeof(char)*1);
 	HP->Array[0]->Word[0]='\0';
 	HP->Array[0]->total=-1;
@@ -162,36 +54,7 @@ int HTcmp(HuffmanTree T1,HuffmanTree T2)
 	}
 	return 0;
 }
-void MHInsert(MinHeap MH,AVLTree AVLT)
-{
-	HuffmanTree HT=malloc(sizeof(struct HuffmanNode));
-	//HT->Word=AVLT->Word;
-	HT->Word=malloc(sizeof(char)*(1+strlen(AVLT->Word)));
-	strcpy(HT->Word,AVLT->Word);//不知\0的问题
-	HT->total=AVLT->total;
-	HT->Left=HT->Right=NULL;
-	HT->level=1;
-	HT->Code=NULL;
 
-	MH->Total++;
-	//MH->Array[MH->Total]=HT;
-	int current=MH->Total;
-	while(HTcmp(HT,MH->Array[current/2])<0)
-	{
-		MH->Array[current]=MH->Array[current/2];
-		current=current/2;
-	}
-	MH->Array[current]=HT;
-}
-void InsertIntoHeap(AVLTree Frequency,MinHeap MH)
-{
-	if(Frequency)
-	{
-		MHInsert(MH,Frequency);
-		InsertIntoHeap(Frequency->Left,MH);
-		InsertIntoHeap(Frequency->Right,MH);
-	}
-}
 void MHHuffmanInsert(MinHeap MH,HuffmanTree HT)
 {
 	MH->Total++;
@@ -233,9 +96,6 @@ HuffmanTree HuffmanCre(MinHeap MH)
 		HuffmanTree HT1=DeleteMin(MH);
 		HuffmanTree HT2=DeleteMin(MH);
 		HuffmanTree Generate=malloc(sizeof(struct HuffmanNode));
-		ChangeAllHuffmanLevel(HT1,1);
-		ChangeAllHuffmanLevel(HT2,1);
-		Generate->level=HT1->level-1;
 		Generate->Left=HT1;
 		Generate->Right=HT2;
 		Generate->total=HT1->total+HT2->total;
@@ -278,15 +138,23 @@ int GetHuffmanHeight(HuffmanTree HT)
 	if(HT)return 1+max(GetHuffmanHeight(HT->Left),GetHuffmanHeight(HT->Right));
 	else return 0;
 }
-void InsertToHash(HuffmanTree HT,HashTable HashT,char type)
+
+void FreeMinHeap(MinHeap MH)
+{
+	free(MH->Array[0]);
+	free(MH->Array);
+	free(MH);
+}
+void FreeHuffmanTree(HuffmanTree HT)
 {
 	if(HT)
 	{
-		if(HT->Word)
-		{
-			HashInsert(HashT,HT->Code,HT->Word,type);
-		}
-		InsertToHash(HT->Left,HashT,type);
-		InsertToHash(HT->Right,HashT,type);
+		
+		HuffmanTree Left=HT->Left;
+		HuffmanTree Right=HT->Right;
+		free(HT->Word);
+		free(HT->Code);
+		FreeHuffmanTree(Left);
+		FreeHuffmanTree(Right);
 	}
 }

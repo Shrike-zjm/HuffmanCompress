@@ -2,60 +2,14 @@
 #include<stdlib.h>
 #include<string.h>
 #include<time.h>
-#include"max.c"
-#include"HashTable.c"
-#include"AVLTree.c"
-#include"MinHeap.c"
-#include"showSmallBytes.c"
-#define JudgeEncodeNumber 128
-//————————————————TEST——————————————————
-struct testnode
-{
-	char* word;
-	struct testnode* Next;
-};
-typedef struct testnode* nPtr;
-struct list
-{
-	nPtr Head;
-	nPtr Tail;
-};
-typedef struct list* List;
-List LCre()
-{
-	List L=malloc(sizeof(struct list));
-	L->Head=L->Tail=NULL;
-	return L;
-}
-void Ladd(List L,char* word)
-{
-	nPtr NP=malloc(sizeof(struct testnode));
-	NP->word=word;
-	NP->Next=NULL;
-	if(L->Head)
-	{
-		L->Tail->Next=NP;
-		L->Tail=NP;
-	}
-	else
-	{
-		L->Head=L->Tail=NP;
-	}
-}
-void Print(List L)
-{
-	nPtr P;
-	for(P=L->Head;P;P=P->Next)
-	{
-		printf("%s ",P->word);
-	}
-}
-
-
-//————————————————TEST——————————————————
-
-
+#include "sconv.c"
 int UTF8;
+#include"max.c"
+#include"MinHeap.c"
+#include"HashTable.c"
+#include"BM3.c"
+#define JudgeEncodeNumber 128
+
 int isBeginWith10(unsigned char uc)
 {
 	if(uc>=0x80&&uc<0xc0)return 1;
@@ -90,22 +44,11 @@ int isUTF_8(FILE* fp)
 	}
 	return res;
 }
-
-//面对数量巨大的中文字符时，使用AVL树储存频率表以优化效率。
-
-
-
-
-//重构：和树没关系
-//再次重构:char GetChineseChar(FILE* fp,char*currentChar,char* dest)
-//    功能:从currentChar开始读一个UTF-8或GBK编码的字符 并再读一位
-//使用前 要先char currentChar=fgetc(fp);
-//使用前 也要判currentChar!=EOF
 char GetChineseChar(FILE* fp,char currentChar,char** dest)//+1在insert函数里解决
 {
 	TotalWord++;
-	char* symbol;//是否正确？
-	if(UTF8)
+	char* symbol;
+	if(UTF8==1)
 	{
 		int SizeOfChinese;
 		if(currentChar>=0)SizeOfChinese=1;
@@ -140,7 +83,6 @@ char GetChineseChar(FILE* fp,char currentChar,char** dest)//+1在insert函数里解决
 			symbol[i]=fgetc(fp);
 		}
 		symbol[SizeOfChar]='\0';
-		//OriginBytes+=SizeOfChar;
 	}
 	*dest=symbol;
 	char realCurrentChar=fgetc(fp);
@@ -168,9 +110,8 @@ int IntoBigFlow(HashTable HT,char* BigFlow,char* FileName,char type)
 //前四个东西是int 依次为 是否UTF-8 合适的质数 压缩文本的总比特数 码表的字节数
 void HuffmanWrite(char* WriteName,char* ArticleBigFlow,char* CodeTableFlow,int CTFLen,int BigFlowBits,int thePrime)
 {
-	//FILE* fp=fopen(WriteName,"w+");
+	//FILE* fp=fopen(WriteName,"w+"); 不能这么写！
 	FILE* fp=fopen(WriteName,"w+b");
-	//int totalBitNum=strlen(ArticleBigFlow);
 	fwrite(&UTF8,4,1,fp);
 	fwrite(&thePrime,4,1,fp);
  	fwrite(&BigFlowBits,4,1,fp);
@@ -227,8 +168,6 @@ void IntoCTF(HuffmanTree HT,char* CodeTableFlow,int* current)
 				strncpy(byte,ptr+i*8,8);
 				byte[8]='\0';
 				char the8bits=CodeToInt8(byte);
-				//printf("%.2x\n",the8bits);
-				//fwrite(&the8bits,1,1,fp);
 				*(CodeTableFlow+(*current))=the8bits;
 				(*current)+=1;
 			}
@@ -271,17 +210,64 @@ char* PatternTo01(char* Pattern,int MaxCodeLength,char ArticleEncoding,HashTable
 			current=strlen(ZeroAndOne);
 		}
 	}
+	else if(ArticleEncoding=='u')
+	{
+		while((*Pattern)!='\0')
+		{
+			char* symbol;
+			int SizeOfChinese;
+			if(*Pattern>=0)SizeOfChinese=1;
+			else
+			{
+				unsigned char uchar=(unsigned)(*Pattern);
+				if(uchar>=0xfc&&uchar<0xfe)SizeOfChinese=6;
+				else if(uchar>=0xf8)SizeOfChinese=5;
+				else if(uchar>=0xf0)SizeOfChinese=4;
+				else if(uchar>=0xe0)SizeOfChinese=3;
+				else if(uchar>=0xc0)SizeOfChinese=2;
+			}
+			symbol=malloc(sizeof(char)*(SizeOfChinese+1));
+			symbol[0]=*Pattern;
+			Pattern++;
+			int i;
+			for(i=1;i<=SizeOfChinese-1;i++)
+			{
+				symbol[i]=*Pattern;
+				Pattern++;
+			}
+			symbol[SizeOfChinese]='\0';
+			char* CodeOfSymbol=HashFind(HashT,symbol,'u');
+			free(symbol);
+			if(CodeOfSymbol)strcpy(ZeroAndOne+current,CodeOfSymbol);
+			else return NULL;
+			current=strlen(ZeroAndOne);
+		}
+		
+	}
 	return ZeroAndOne;
+}
+char* ToUTF8(char* str)
+{
+	int size=sconv_gbk_to_unicode(str, -1, NULL, 0);
+	wchar *unicode_str = malloc(sizeof(char)*(size+4));
+	size = sconv_gbk_to_unicode(str, -1, unicode_str, size);
+    unicode_str[size / 2] = 0;
+    size = sconv_unicode_to_utf8(unicode_str, -1, NULL, 0);
+    char *utf8_str = malloc(sizeof(char)*(size+1));
+    sconv_unicode_to_utf8(unicode_str, -1, utf8_str, size);
+    utf8_str[size] = 0;
+    free(unicode_str);
+    return utf8_str;
 }
 int main()
 {
-	char command;
+	char* command=malloc(sizeof(char)*101);
 	while(1)
 	{
 		printf("————————————————————————————\n请输入操作命令:\n");
 		printf("【c】:压缩文件\t【u】:解压文件\t【f】:在压缩文件中查找\t【q】:退出程序\n");
-		scanf("%c",&command);
-		switch(command)
+		scanf("%s",command);
+		switch(command[0])
 		{
 			case 'c':
 			{
@@ -308,9 +294,14 @@ int main()
 						UTF8=0;
 					}
 					fclose(fp2);
+					char CodeType='g';
+					if(UTF8)CodeType='u';
 					//以上部分为判断中文编码
 
-					AVLTree Frequency=NULL;
+
+					clock_t startAVL,stopAVL;
+					startAVL=clock();
+					FHTable FreHT=CreFHTable(NextPrime(6000));
 					char currentChar=fgetc(fp);
 					int OriginBytes=0;
 					while(currentChar!=EOF)
@@ -318,26 +309,26 @@ int main()
 						char* dest;
 						currentChar=GetChineseChar(fp,currentChar,&dest);
 						OriginBytes+=strlen(dest);
-						Frequency=AVLInsert(Frequency,dest);
+						FHInsert(FreHT,dest);
 					}
 					fclose(fp);
-					//printBetter(Frequency);
+					stopAVL=clock();
 
-					//以上部分将字频统计进AVL树Frequency中
 
-					//接下来把Frequency的结点放到最小堆中
+					//以上部分将字频统计进哈希表FreHT中
+					//接下来把FreHT的结点放到最小堆中
 					MinHeap MH=CreateMinHeap(WordNum);
-					InsertIntoHeap(Frequency,MH);
+					FHTIntoHeap(FreHT,MH);
 
-					//AVL树优化读取频数的目的已达到，结束使命。
-					FreeAVLTree(Frequency);
+					//哈希表优化读取频数的目的已达到，结束使命。
+					FreeFHTable(FreHT);
 
 					//创建哈夫曼树 并根据哈夫曼树给每个结点赋上编码
 					HuffmanTree HT=HuffmanCre(MH);
                     FreeMinHeap(MH);
-					//PrintHuffman(HT);
+
 					SetCode(HT,'f',0,NULL);
-					printHuffmanBetter(HT);
+					//if(command[1]=='c')printHuffmanBetter(HT);
 
 
 					int MaxCodeLength=GetHuffmanHeight(HT)-1;
@@ -347,28 +338,34 @@ int main()
 					printf("ThePrime is:%d\n",thePrime);
 					printf("TotalWord is:%d\n",TotalWord);
 
-
+					//创建由字到哈夫曼码的哈希表
 					HashTable WordToCode=CreHashTable(thePrime);
-					InsertToHash(HT,WordToCode,'g');
+					InsertToHash(HT,WordToCode,CodeType);
 					//Word和Code还储存在哈夫曼树的节点里 还不能Free
 
+
+					//BigFlow是一个极大的char数组
+					//先把要写的二进制文件每八位以一个char的形式存到BigFlow里
 					int i;
 					char* BigFlow=malloc(sizeof(char)*MaxCodeLength*TotalWord+8);
-					int ArticleBits=IntoBigFlow(WordToCode,BigFlow,FileName,'g');
+					int ArticleBits=IntoBigFlow(WordToCode,BigFlow,FileName,CodeType);
 					printf("ArticleBits is: %d\n",ArticleBits);
 					for(i=1;i<=7;i++)//草
 					{
 						*(BigFlow+i+strlen(BigFlow))='\0';
 					}
 
+
+					//同理 把码表存到CodeTableFlow里
 					int MaxCharLength=2;
 					if(UTF8)MaxCharLength=6;
-					//int NodeBytes=1+MaxCharLength+(1+MaxCodeLength/8);//码结点定长
 					char* CodeTableFlow=malloc(sizeof(char)*WordNum*(1+MaxCharLength+1+MaxCodeLength/8));//定个上限就行(最后直接写它)
 					int current=0;
 					IntoCTF(HT,CodeTableFlow,&current);
 					printf("The length of CodeTableFlow is : %d\n",current);
-
+					
+					
+					//最后把这两个Flow写到文件里
 					int ZipBytes=4*4+current+ArticleBits/8+(ArticleBits/8!=0);
 
 					int FNLen=strlen(FileName);
@@ -385,6 +382,8 @@ int main()
 					printf("Compressed file size is %d bytes.\n",ZipBytes);
 					printf("The compression ratio is %.4f%%\n",100.0*ZipBytes/OriginBytes);
 					double duration=((double)stop-start)/1000;
+					double durationAVL=((double)stopAVL-startAVL)/1000;
+					printf("It took %.2f second to create the FrequencyHashTable\n",durationAVL);
 					printf("It took %.2f second to compress the ",duration);
 					printf("%s\n",FileNameCPY);
 					FreeHashTable(WordToCode);
@@ -402,7 +401,7 @@ int main()
 			case 'f':
 			{
 				int MaxCodeLength=0;
-				if(command=='u')printf("待解压的文件名(“-Compressed”之前的部分)为:\n");
+				if(command[0]=='u')printf("待解压的文件名(“-Compressed”之前的部分)为:\n");
 				else printf("待查找的压缩文件名(“-Compressed”之前的部分)为:\n");
 				char* FileName=malloc(sizeof(char)*121);
 				char* FileName2=malloc(sizeof(char)*121);
@@ -418,9 +417,10 @@ int main()
 				free(FileName);
 				if(fp)
 				{
-					FILE* fp2=fopen(FileName2,"w+b");
-					if(command=='f')fclose(fp2);
+					FILE* fp2;
+					if(command[0]=='u')fp2=fopen(FileName2,"w+b");
 					free(FileName2);
+					//先读出文件最开始存的四个int
 	 				int* isUTF8Ptr=malloc(sizeof(int));
 					int* thePrimePtr=malloc(sizeof(int));
 					int* ArticleBitsPtr=malloc(sizeof(int));;
@@ -430,12 +430,15 @@ int main()
 					fread(ArticleBitsPtr,4,1,fp);
 					fread(CodeTableBytesPtr,4,1,fp);
 					UTF8=*isUTF8Ptr;
-
-					HashTable HashT=CreHashTable(*thePrimePtr);
+					char CodeType='g';
+					if(UTF8)CodeType='u';
+					HashTable CodeToWord=CreHashTable(*thePrimePtr);
+					HashTable WordToCode;
+					if(command[0]=='f')WordToCode=CreHashTable(*thePrimePtr);
 					//u 解压 哈希表是码到字
 					//f 查找 哈希表是字到码
-					
 
+					//接下来 先把码表读出来
 					int PassedBytes=0;
 					while(PassedBytes<*CodeTableBytesPtr)
 					{
@@ -483,19 +486,21 @@ int main()
 							free(thisBit);
 						}
 						Code[i]='\0';
-						char type='c';
-						if(command=='f')
+						
+						if(command[0]=='f')
 						{
-							type='g';
+							HashInsert(WordToCode,Code,Word,CodeType);
 							if(strlen(Code)>MaxCodeLength)MaxCodeLength=strlen(Code);
 						}
-						HashInsert(HashT,Code,Word,type);
+						HashInsert(CodeToWord,Code,Word,'c');
 					}
 
+
+					//码表读完了之后 再根据需求把文章读出来
 					unsigned currentByte;
 					char* Code;
 					char* Article;
-					if(command=='u')Code=malloc(sizeof(char)*(65));
+					if(command[0]=='u')Code=malloc(sizeof(char)*(65));
 					else Article=malloc(sizeof(char)*((*ArticleBitsPtr)+8));
 					int currentCodePos=0;
 					int weight;
@@ -511,12 +516,12 @@ int main()
 						int thisBitNum=currentByte/weight;
 						thisBit[0]='0'+thisBitNum;
 						thisBit[1]='\0';//草草草草草
-						
-						if(command=='u')
+
+						if(command[0]=='u')
 						{
 							strcpy(Code+currentCodePos,thisBit);
 							currentCodePos++;
-							char* FoundWord=HashFind(HashT,Code,'c');
+							char* FoundWord=HashFind(CodeToWord,Code,'c');
 							if(FoundWord)
 							{
 								currentCodePos=0;
@@ -524,22 +529,24 @@ int main()
 							}
 						}
 						else strcpy(Article+i,thisBit);
-						
+
 						currentByte-=weight*thisBitNum;
 						weight/=2;
 						free(thisBit);
 					}
+					
 					fclose(fp);
-					
-					
-					if(command=='u')
+
+
+					if(command[0]=='u')
 					{
 						fclose(fp2);
+						
 						printf("\n——Unzip the file successfully!——\n\n");
 					}
-					else if(command=='f')
+					else if(command[0]=='f')
 					{
-						printf("%s",Article);
+						//printf("%s",Article);
 						printf("\n——Read the file successfully!——\n\n");
 						char* Pattern=malloc(sizeof(char)*201);
 						while(1)
@@ -547,18 +554,38 @@ int main()
 							printf("请输入要查找的内容:(输入“Quit!”退出查找)\n");
 							gets(Pattern);
 							if(strcmp(Pattern,"Quit!")==0)break;
-							char* ZeroAndOne=PatternTo01(Pattern,MaxCodeLength,'g',HashT);
-							if(!ZeroAndOne)
+							char* Pattern2;
+							char* ZeroAndOnePattern;
+							
+							if(UTF8)
+							{
+								Pattern2=ToUTF8(Pattern);
+								ZeroAndOnePattern=PatternTo01(Pattern2,MaxCodeLength,CodeType,WordToCode);
+							}
+							else ZeroAndOnePattern=PatternTo01(Pattern,MaxCodeLength,CodeType,WordToCode);
+							if(!ZeroAndOnePattern)
 							{
 								printf("输入的字有一个根本就不在这篇文章里啊(╯°Д°)╯︵ ┻━┻\n");
 								continue;
 							}
-							printf("%s",ZeroAndOne);
-						}
+							//printf("%s\n",ZeroAndOnePattern);
 
+							int FoundTimes=0;
+							int LastCharPos=0;
+							int line=1;
+							int pos=1;
+//							LineAndPos(Article,5,&line,&pos,&LastCharPos,MaxCodeLength,CodeToWord);
+//							printf("line is %d\npos is %d\n",line,pos);
+//							LineAndPos(Article,17,&line,&pos,&LastCharPos,MaxCodeLength,CodeToWord);
+//							printf("line is %d\npos is %d\n",line,pos);
+							good_suffix_algo(Article,ZeroAndOnePattern,&FoundTimes,&line,&pos,&LastCharPos,MaxCodeLength,CodeToWord);
+							if(FoundTimes==0)printf("没有找到“%s”！\n",Pattern);
+							else printf("“%s”共出现了%d次。\n",Pattern,FoundTimes);
+						}
+						FreeHashTable(WordToCode);
 						free(Pattern);
 					}
-					
+					FreeHashTable(CodeToWord);
 				}
 				else
 				{
@@ -577,6 +604,6 @@ int main()
 		}
 	}
 
-
+	free(command);
 	return 0;
 }
