@@ -1,6 +1,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
+#include<time.h>
 #include"max.c"
 #include"HashTable.c"
 #include"AVLTree.c"
@@ -125,7 +126,7 @@ char GetChineseChar(FILE* fp,char currentChar,char** dest)//+1在insert函数里解决
 			symbol[i]=fgetc(fp);
 		}
 		symbol[SizeOfChinese]='\0';
-		//*OriginBytes+=SizeOfChinese;
+		//OriginBytes+=SizeOfChinese;
 	}
 	else//GBK-2312字符读入
 	{
@@ -139,7 +140,7 @@ char GetChineseChar(FILE* fp,char currentChar,char** dest)//+1在insert函数里解决
 			symbol[i]=fgetc(fp);
 		}
 		symbol[SizeOfChar]='\0';
-		//*OriginBytes+=SizeOfChar;
+		//OriginBytes+=SizeOfChar;
 	}
 	*dest=symbol;
 	char realCurrentChar=fgetc(fp);
@@ -154,9 +155,10 @@ int IntoBigFlow(HashTable HT,char* BigFlow,char* FileName,char type)
 	{
 		char* dest;
 		currentChar=GetChineseChar(fp,currentChar,&dest);
-		
-		char* Code=Find(HT,dest,type);
+
+		char* Code=HashFind(HT,dest,type);
 		strcpy(BigFlow+current,Code);
+		//*(BigFlow+current+strlen(Code))='\0';
 		current+=strlen(Code);
 		free(dest);
 	}
@@ -192,9 +194,9 @@ void HuffmanWrite(char* WriteName,char* ArticleBigFlow,char* CodeTableFlow,int C
 		fwrite(&the8bits,1,1,fp);
 		current+=8;
 	}
-	
+	free(byte);
 	free(ArticleBigFlow);
-//	free(byte);
+
 	fclose(fp);
 }
 
@@ -211,10 +213,10 @@ void IntoCTF(HuffmanTree HT,char* CodeTableFlow,int* current)
 			char LenInfo=(CharBytes<<5)|(CodeBits);
 			*(CodeTableFlow+(*current))=LenInfo;
 			(*current)+=1;
-			
+
 			strcpy((CodeTableFlow+(*current)),HT->Word);
 			(*current)+=strlen(HT->Word);
-			
+
 			int times=1+CodeBits/8;//这里的问题 只有1-7需要+1
 			if(CodeBits%8==0)times-=1;
 			char* ptr=HT->Code;
@@ -239,23 +241,58 @@ void IntoCTF(HuffmanTree HT,char* CodeTableFlow,int* current)
 
 	}
 }
+char* PatternTo01(char* Pattern,int MaxCodeLength,char ArticleEncoding,HashTable HashT)
+{
+	//windows命令行的编码就是GBK 只能先读再转
+//	if(*Pattern='\0')return NULL;
+	if(*Pattern=='\0')return NULL;
+	int current=0;
+	char* ZeroAndOne=malloc(sizeof(char)*(strlen(Pattern)*MaxCodeLength+1));
+	if(ArticleEncoding=='g')
+	{
+		while((*Pattern)!='\0')
+		{
+			char* symbol;
+			int SizeOfChar=1;
+			if((*Pattern)&0x80)SizeOfChar=2;
+			symbol=malloc(sizeof(char)*(SizeOfChar+1));
+			symbol[0]=*Pattern;
+			if(SizeOfChar==2)
+			{
+				Pattern++;
+				symbol[1]=*Pattern;
+			}
+			symbol[SizeOfChar]='\0';
+			Pattern++;
+			char* CodeOfSymbol=HashFind(HashT,symbol,'g');
+			free(symbol);
+			if(CodeOfSymbol)strcpy(ZeroAndOne+current,CodeOfSymbol);
+			else return NULL;
+			current=strlen(ZeroAndOne);
+		}
+	}
+	return ZeroAndOne;
+}
 int main()
 {
 	char command;
 	while(1)
 	{
-		printf("——————————————————————\n请输入操作命令:\n");
-		printf("【c】:压缩文件\t【u】:解压文件\t【q】:退出程序\n");
-		scanf("%s",&command);
+		printf("————————————————————————————\n请输入操作命令:\n");
+		printf("【c】:压缩文件\t【u】:解压文件\t【f】:在压缩文件中查找\t【q】:退出程序\n");
+		scanf("%c",&command);
 		switch(command)
 		{
 			case 'c':
 			{
+				WordNum=0;
+				TotalWord=0;
+				clock_t start,stop;
 				printf("当前目录下待处理的文件名(带扩展名)为:\n");
 				char* FileName=malloc(sizeof(char)*121);
 				getchar();
 				gets(FileName);
-
+				start=clock();
 				FILE* fp=fopen(FileName,"r");
 				if(fp)
 				{
@@ -297,6 +334,7 @@ int main()
 
 					//创建哈夫曼树 并根据哈夫曼树给每个结点赋上编码
 					HuffmanTree HT=HuffmanCre(MH);
+                    FreeMinHeap(MH);
 					//PrintHuffman(HT);
 					SetCode(HT,'f',0,NULL);
 					printHuffmanBetter(HT);
@@ -312,12 +350,13 @@ int main()
 
 					HashTable WordToCode=CreHashTable(thePrime);
 					InsertToHash(HT,WordToCode,'g');
+					//Word和Code还储存在哈夫曼树的节点里 还不能Free
 
 					int i;
-					char* BigFlow=malloc(sizeof(char)*MaxCodeLength*TotalWord);
+					char* BigFlow=malloc(sizeof(char)*MaxCodeLength*TotalWord+8);
 					int ArticleBits=IntoBigFlow(WordToCode,BigFlow,FileName,'g');
 					printf("ArticleBits is: %d\n",ArticleBits);
-					for(i=1;i<=7;i++)
+					for(i=1;i<=7;i++)//草
 					{
 						*(BigFlow+i+strlen(BigFlow))='\0';
 					}
@@ -329,19 +368,29 @@ int main()
 					int current=0;
 					IntoCTF(HT,CodeTableFlow,&current);
 					printf("The length of CodeTableFlow is : %d\n",current);
-					
+
 					int ZipBytes=4*4+current+ArticleBits/8+(ArticleBits/8!=0);
-					
+
 					int FNLen=strlen(FileName);
+					char* FileNameCPY=malloc(sizeof(char)*121);
+					strcpy(FileNameCPY,FileName);
 					char after[20]="-Compressed";
 					strcpy(FileName+FNLen,after);
 					HuffmanWrite(FileName,BigFlow,CodeTableFlow,current,ArticleBits,thePrime);
 					free(CodeTableFlow);
 
+					stop=clock();
 					printf("Compressed file successfully!\n");
 					printf("Original file size is %d bytes.\n",OriginBytes);
 					printf("Compressed file size is %d bytes.\n",ZipBytes);
 					printf("The compression ratio is %.4f%%\n",100.0*ZipBytes/OriginBytes);
+					double duration=((double)stop-start)/1000;
+					printf("It took %.2f second to compress the ",duration);
+					printf("%s\n",FileNameCPY);
+					FreeHashTable(WordToCode);
+					FreeHuffmanTree(HT);
+					free(FileName);
+					free(FileNameCPY);
 				}
 				else
 				{
@@ -350,8 +399,11 @@ int main()
 				break;
 			}
 			case 'u':
+			case 'f':
 			{
-				printf("待解压的文件名(“-Compressed”之前的部分)为:\n");
+				int MaxCodeLength=0;
+				if(command=='u')printf("待解压的文件名(“-Compressed”之前的部分)为:\n");
+				else printf("待查找的压缩文件名(“-Compressed”之前的部分)为:\n");
 				char* FileName=malloc(sizeof(char)*121);
 				char* FileName2=malloc(sizeof(char)*121);
 				getchar();
@@ -362,12 +414,12 @@ int main()
 				strcpy(FileName2,after2);
 				strcpy(FileName2+9,FileName);
 				strcpy(FileName+FNLen,after);
-				
 				FILE* fp=fopen(FileName,"rb");
 				free(FileName);
 				if(fp)
 				{
 					FILE* fp2=fopen(FileName2,"w+b");
+					if(command=='f')fclose(fp2);
 					free(FileName2);
 	 				int* isUTF8Ptr=malloc(sizeof(int));
 					int* thePrimePtr=malloc(sizeof(int));
@@ -379,13 +431,15 @@ int main()
 					fread(CodeTableBytesPtr,4,1,fp);
 					UTF8=*isUTF8Ptr;
 
-					HashTable CodeToWord=CreHashTable(*thePrimePtr);
-
+					HashTable HashT=CreHashTable(*thePrimePtr);
+					//u 解压 哈希表是码到字
+					//f 查找 哈希表是字到码
+					
 
 					int PassedBytes=0;
 					while(PassedBytes<*CodeTableBytesPtr)
 					{
-						
+
 						//char LenInfo=fgetc(fp);
 						char* LenInfoPtr=malloc(sizeof(char));
 						fread(LenInfoPtr,1,1,fp);
@@ -429,11 +483,20 @@ int main()
 							free(thisBit);
 						}
 						Code[i]='\0';
-						HashInsert(CodeToWord,Code,Word,'c');
+						char type='c';
+						if(command=='f')
+						{
+							type='g';
+							if(strlen(Code)>MaxCodeLength)MaxCodeLength=strlen(Code);
+						}
+						HashInsert(HashT,Code,Word,type);
 					}
 
 					unsigned currentByte;
-					char* Code=malloc(sizeof(char)*(65));
+					char* Code;
+					char* Article;
+					if(command=='u')Code=malloc(sizeof(char)*(65));
+					else Article=malloc(sizeof(char)*((*ArticleBitsPtr)+8));
 					int currentCodePos=0;
 					int weight;
 					int i;
@@ -448,22 +511,54 @@ int main()
 						int thisBitNum=currentByte/weight;
 						thisBit[0]='0'+thisBitNum;
 						thisBit[1]='\0';//草草草草草
-						strcpy(Code+currentCodePos,thisBit);
-						currentCodePos++;
-						*(Code+currentCodePos)='\0';
+						
+						if(command=='u')
+						{
+							strcpy(Code+currentCodePos,thisBit);
+							currentCodePos++;
+							char* FoundWord=HashFind(HashT,Code,'c');
+							if(FoundWord)
+							{
+								currentCodePos=0;
+								fputs(FoundWord,fp2);
+							}
+						}
+						else strcpy(Article+i,thisBit);
+						
 						currentByte-=weight*thisBitNum;
 						weight/=2;
 						free(thisBit);
-						char* FoundWord=Find(CodeToWord,Code,'c');
-						if(FoundWord)
-						{
-							currentCodePos=0;
-							fputs(FoundWord,fp2);
-						}
 					}
 					fclose(fp);
-					fclose(fp2);
-					printf("\n——Unzip the file successfully!——\n\n");
+					
+					
+					if(command=='u')
+					{
+						fclose(fp2);
+						printf("\n——Unzip the file successfully!——\n\n");
+					}
+					else if(command=='f')
+					{
+						printf("%s",Article);
+						printf("\n——Read the file successfully!——\n\n");
+						char* Pattern=malloc(sizeof(char)*201);
+						while(1)
+						{
+							printf("请输入要查找的内容:(输入“Quit!”退出查找)\n");
+							gets(Pattern);
+							if(strcmp(Pattern,"Quit!")==0)break;
+							char* ZeroAndOne=PatternTo01(Pattern,MaxCodeLength,'g',HashT);
+							if(!ZeroAndOne)
+							{
+								printf("输入的字有一个根本就不在这篇文章里啊(╯°Д°)╯︵ ┻━┻\n");
+								continue;
+							}
+							printf("%s",ZeroAndOne);
+						}
+
+						free(Pattern);
+					}
+					
 				}
 				else
 				{
