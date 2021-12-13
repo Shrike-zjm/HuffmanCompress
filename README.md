@@ -4,7 +4,8 @@
 
 ·BM算法是原封不动照搬的Google上的: <https://www.tutorialandexample.com/boyer-moore-algorithm/>  
 
-·GBK转UTF-8的函数用了这位老哥写的库<https://github.com/breezechen/sconv>
+·GBK转UTF-8的函数用了这位老哥写的库<https://github.com/breezechen/sconv>  
+
 特性  
 ------------------
 ·支持全球任何语言(UTF-8编码)  
