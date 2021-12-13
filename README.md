@@ -1,11 +1,12 @@
 # 哈夫曼编码压缩软件
-##声明  
+声明
+------------------
 
 ·BM算法是原封不动照搬的Google上的: <https://www.tutorialandexample.com/boyer-moore-algorithm/>  
 
 ·GBK转UTF-8的函数用了这位老哥写的库<https://github.com/breezechen/sconv>
-##特性  
-
+特性  
+------------------
 ·支持全球任何语言(UTF-8编码)  
 
 ·对于长达数十万字的文章，压缩、解压速度极快(1秒之内)，压缩率基本达到最高。   
