@@ -22,7 +22,8 @@
 	
 ·在压缩文件中搜索时，不仅可返回在二进制文件中的位置，还能返回在原文中的行数、列数  
 	
-##演示
+演示
+-----------------
 [![](http://shrike.site/pic/红楼梦.png)](http://shrike.site/pic/红楼梦.png)
 [![](http://shrike.site/pic/三体.png)](http://shrike.site/pic/三体.png)
 [![](http://shrike.site/pic/三体找水滴.png)](http://shrike.site/pic/三体找水滴.png)
